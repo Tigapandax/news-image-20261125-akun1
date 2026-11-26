@@ -1,8 +1,8 @@
 # The World in One Picture — 25 November 2026
 
-[![make.fun bounty](https://img.shields.io/badge/make.fun-bounty-2b6cb0)](https://make.fun/c/news-image-20261125)
-[![Python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
-[![Pillow](https://img.shields.io/badge/rendered_with-Pillow-8a2be2)](https://pillow.readthedocs.io/)
+[![make.fun · news-image-20261125](https://make.fun/badge/news-image-20261125.svg)](https://make.fun/bounty/news-image-20261125?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
+[![rank](https://make.fun/badge/news-image-20261125/Tigapandax/news-image-20261125-akun1/rank.svg)](https://make.fun/bounty/news-image-20261125/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
+[![reward](https://make.fun/badge/news-image-20261125/Tigapandax/news-image-20261125-akun1/reward.svg)](https://make.fun/bounty/news-image-20261125?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
 
 One navy broadsheet that squeezes Wednesday 25 November 2026 into a
 single image: tankers burning in the Strait of Hormuz, Ukrainian drones

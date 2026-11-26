@@ -1,68 +1,51 @@
-"""Entrypoint: write the front-page image to /output/entry.png.
+"""Ship the rendered news poster as this entry's output.
 
-Standard library only. The image itself is built at build time by
-draw.py and shipped as entry.png; this program checks it is a PNG of
-at most 1024x1024 pixels, copies it to the output path, and verifies
-the copy byte-for-byte, so both grading runs write identical bytes.
+Stdlib only. The poster itself is painted ahead of time by ``draw.py``
+(Pillow, build time); this script only places the finished PNG into
+the output directory the harness provides.
 
-Run:  python3 draw.py && python3 main.py
+Run it directly to check the flow locally::
+
+    MAKEFUN_OUTPUT_DIR=/tmp/out25 python3 main.py
 """
 
-import hashlib
+from __future__ import annotations
+
 import os
 import shutil
-import struct
-import sys
+from pathlib import Path
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "entry.png")
-DST = os.path.join(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"),
-                   "entry.png")
-# MAKEFUN_OUTPUT_DIR is only a local-test convenience; the grader
-# runs with /output writable, so the default path is what matters.
-PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-MAX_DIM = 1024
+POSTER_NAME = "entry.png"
 
 
-def png_size(path):
-    """Read width/height from the PNG IHDR chunk (no image library)."""
-    with open(path, "rb") as f:
-        header = f.read(33)
-    if header[:8] != PNG_MAGIC or header[12:16] != b"IHDR":
-        return None
-    width, height = struct.unpack(">II", header[16:24])
-    return width, height
+def poster_source() -> Path:
+    """The finished poster sitting next to this script."""
+    here = Path(__file__).resolve().parent
+    return here / POSTER_NAME
 
 
-def sha256(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def output_dir() -> Path:
+    """Where the harness wants the entry (default: /output)."""
+    return Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
 
 
-def main():
-    if not os.path.exists(SRC):
-        print("entry.png missing next to main.py")
-        return 1
-    size = png_size(SRC)
-    if size is None:
-        print("entry.png is not a PNG file")
-        return 1
-    if size[0] > MAX_DIM or size[1] > MAX_DIM:
-        print(f"entry.png is {size[0]}x{size[1]}, over the "
-              f"{MAX_DIM}x{MAX_DIM} cap")
-        return 1
-    os.makedirs(os.path.dirname(DST), exist_ok=True)
-    shutil.copyfile(SRC, DST)
-    if sha256(SRC) != sha256(DST):
-        print("copy mismatch: output differs from entry.png")
-        return 1
-    print(f"Wrote {DST} ({size[0]}x{size[1]}, "
-          f"{os.path.getsize(DST)} bytes, copy verified)")
-    return 0
+def place_poster() -> Path:
+    """Copy the poster into the output directory; return its new path."""
+    src = poster_source()
+    if not src.is_file():
+        raise SystemExit(f"poster missing next to this script: {src}")
+    dest_dir = output_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / POSTER_NAME
+    shutil.copyfile(src, dest)
+    return dest
+
+
+def main() -> None:
+    dest = place_poster()
+    size = dest.stat().st_size
+    print(f"entry ready: {dest} ({size} bytes)")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

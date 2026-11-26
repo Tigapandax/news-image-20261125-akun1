@@ -1,212 +1,260 @@
-"""Draw the front page for 25 November 2026.
+"""Paint the one-page news poster for Wednesday 25 November 2026.
 
-Build time only: renders entry.png (the image the entry is judged on)
-from the day's headlines, written out below. No network, no input files.
-Run:  python3 draw.py
+Build-time helper only: run this once to produce ``entry.png``. The
+competition entry itself is shipped by ``main.py`` (stdlib only);
+this file is the only place Pillow is needed.
+
+Layout, from top to bottom on a deep-navy broadsheet:
+
+* masthead with the date,
+* one full-width lead story (the Strait of Hormuz),
+* two columns of two story cards each,
+* a row of three short items,
+* an "also today" ticker and a footer line.
 """
+
+from __future__ import annotations
 
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "entry.png")
+PAGE_W = 1024
+PAGE_H = 1008
+EDGE = 36
+GAP = 20
 
-W = 1024
-MARGIN = 44
-CONTENT_W = W - 2 * MARGIN
-
-PAPER = (247, 243, 234)      # warm newsprint
-INK = (22, 22, 22)
-MUTED = (90, 86, 78)
-RED = (178, 34, 34)
-RULE = (180, 174, 162)
-BLUE = (28, 68, 120)
+NAVY = (15, 29, 50)
+PAPER = (246, 240, 228)
+PAPER_SOFT = (233, 225, 206)
+CRIMSON = (166, 30, 45)
+GOLD = (217, 164, 65)
+INK = (22, 30, 44)
+SLATE = (86, 95, 111)
+OFFWHITE = (250, 248, 243)
+HAIRLINE = (198, 188, 166)
 
 FONT_DIR = "/usr/share/fonts/truetype/dejavu"
 
 
-def font(name, size):
+def font_at(name: str, size: int) -> ImageFont.FreeTypeFont:
+    """Load a DejaVu face at the requested point size."""
     return ImageFont.truetype(os.path.join(FONT_DIR, name), size)
 
 
-F_TITLE = font("DejaVuSerif-Bold.ttf", 52)
-F_DATE = font("DejaVuSans-Bold.ttf", 18)
-F_LABEL = font("DejaVuSans-Bold.ttf", 19)
-F_HEAD = font("DejaVuSerif-Bold.ttf", 33)
-F_HEAD_SM = font("DejaVuSerif-Bold.ttf", 24)
-F_BODY = font("DejaVuSans.ttf", 20)
-F_BODY_SM = font("DejaVuSans.ttf", 18)
-F_FOOT = font("DejaVuSans.ttf", 16)
+SERIF_BOLD = lambda size: font_at("DejaVuSerif-Bold.ttf", size)
+SERIF = lambda size: font_at("DejaVuSerif.ttf", size)
+SANS = lambda size: font_at("DejaVuSans.ttf", size)
+SANS_BOLD = lambda size: font_at("DejaVuSans-Bold.ttf", size)
 
 
-def wrap(draw, text, fnt, width):
-    """Wrap text into lines that fit width, word by word."""
-    lines = []
-    for para in text.split("\n"):
-        words = para.split()
-        if not words:
-            lines.append("")
-            continue
-        cur = words[0]
-        for w in words[1:]:
-            trial = cur + " " + w
-            if draw.textlength(trial, font=fnt) <= width:
-                cur = trial
-            else:
-                lines.append(cur)
-                cur = w
-        lines.append(cur)
+def wrap_text(draw: ImageDraw.ImageDraw, text: str,
+              font: ImageFont.FreeTypeFont, width: int) -> list[str]:
+    """Greedy word wrap: split *text* into lines no wider than *width*."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if draw.textlength(trial, font=font) <= width or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
-def text_block(draw, x, y, lines, fnt, fill, leading):
-    for ln in lines:
-        draw.text((x, y), ln, font=fnt, fill=fill)
+def blurb(draw: ImageDraw.ImageDraw, x: int, y: int, text: str,
+          font: ImageFont.FreeTypeFont, fill: tuple[int, int, int],
+          width: int, leading: int) -> int:
+    """Draw *text* wrapped inside *width*; return the y after the block."""
+    for line in wrap_text(draw, text, font, width):
+        draw.text((x, y), line, font=font, fill=fill)
         y += leading
     return y
 
 
-LEAD = {
-    "label": "IRAN WAR  —  LEAD",
-    "headline": "Tankers burn in the Strait of Hormuz",
-    "body": ("Two oil tankers strike naval mines and catch fire in the "
-             "strait, Iran says. Houthi rebels claim an attack on Saudi "
-             "Arabia's Ras Tanura refinery as the Gulf war widens."),
-}
-
-STORIES = [
-    {
-        "label": "UKRAINE",
-        "color": RED,
-        "headline": "Drones set two Russian refineries ablaze",
-        "body": ("Ukrainian drones hit Rosneft's Syzran and Kuibyshev "
-                 "refineries overnight. A Russian strike kills two in "
-                 "the Odesa region and hits Kyiv."),
-    },
-    {
-        "label": "MARKETS",
-        "color": INK,
-        "headline": "Asia slides; Dow tops 50,000",
-        "body": ("South Korea's KOSPI plunges 6.16% and Japan's Nikkei "
-                 "falls 2.78%. On Wall Street the Dow closes above "
-                 "50,000 for the first time."),
-    },
-    {
-        "label": "HUAWEI",
-        "color": BLUE,
-        "headline": "Huawei convicted in US fraud trial",
-        "body": ("A Brooklyn jury finds the Chinese tech giant guilty "
-                 "on 10 of 12 counts, including bank fraud, sanctions "
-                 "violations and stealing trade secrets."),
-    },
-    {
-        "label": "EGYPT",
-        "color": RED,
-        "headline": "Fuel tanker fire kills 31 near Cairo",
-        "body": ("A tanker crash ignites a huge fire on a highway "
-                 "outside Cairo. Egypt's Health Ministry says at "
-                 "least 31 people are dead."),
-    },
-    {
-        "label": "SUDAN",
-        "color": INK,
-        "headline": "RSF drone strikes kill 19 civilians",
-        "body": ("Sudan's paramilitary Rapid Support Forces hit two "
-                 "cities with drones, killing 19 civilians and "
-                 "wounding 20, rights lawyers say."),
-    },
-    {
-        "label": "CLIMATE",
-        "color": BLUE,
-        "headline": "Pope decries failure of COP31",
-        "body": ("Pope Leo XIV voices concern as the UN climate talks "
-                 "end with no deal. Australia and the Solomon Islands "
-                 "sign a security treaty."),
-    },
-]
-
-ALSO = ("Houthis claim a drone strike on a Riyadh tower injured 11; "
-        "Shenzhou-24 docks with Tiangong; Colombia frees supermarket "
-        "hostages; Bogor mine toll rises to six; Macy's Thanksgiving "
-        "parade postponed by a storm.")
+def chip(draw: ImageDraw.ImageDraw, x: int, y: int, label: str) -> int:
+    """Paint a small crimson label chip; return its right edge."""
+    font = SANS_BOLD(15)
+    pad_x, pad_y = 10, 5
+    text_w = int(draw.textlength(label, font=font))
+    box_h = 15 + pad_y * 2
+    draw.rounded_rectangle(
+        [x, y, x + text_w + pad_x * 2, y + box_h],
+        radius=4, fill=CRIMSON,
+    )
+    draw.text((x + pad_x, y + pad_y), label, font=font, fill=OFFWHITE)
+    return x + text_w + pad_x * 2
 
 
-def draw_page():
-    img = Image.new("RGB", (W, 1400), PAPER)
-    d = ImageDraw.Draw(img)
-    y = 36
+def hairline(draw: ImageDraw.ImageDraw, y: int, x0: int, x1: int,
+             fill: tuple[int, int, int] = HAIRLINE, width: int = 2) -> None:
+    draw.line([(x0, y), (x1, y)], fill=fill, width=width)
 
-    # Masthead
-    title = "THE WORLD IN ONE PAGE"
-    tw = d.textlength(title, font=F_TITLE)
-    d.text(((W - tw) / 2, y), title, font=F_TITLE, fill=INK)
-    y += 60
-    d.line([(MARGIN, y), (W - MARGIN, y)], fill=RED, width=4)
-    y += 12
-    date = "WEDNESDAY, 25 NOVEMBER 2026  •  SUM UP OF THE DAY'S WORLD NEWS"
-    dw = d.textlength(date, font=F_DATE)
-    d.text(((W - dw) / 2, y), date, font=F_DATE, fill=MUTED)
-    y += 26
-    d.line([(MARGIN, y), (W - MARGIN, y)], fill=INK, width=3)
+
+def masthead(draw: ImageDraw.ImageDraw) -> int:
+    """Top of the page: gold rule, title, date line, thin rule."""
+    y = 26
+    draw.line([(EDGE, y), (PAGE_W - EDGE, y)], fill=GOLD, width=5)
     y += 18
+    title = "THE WORLD IN ONE PICTURE"
+    title_font = SERIF_BOLD(52)
+    title_w = int(draw.textlength(title, font=title_font))
+    draw.text(((PAGE_W - title_w) // 2, y), title,
+              font=title_font, fill=OFFWHITE)
+    y += 66
+    dateline = "WEDNESDAY, 25 NOVEMBER 2026  •  ONE DAY, ONE PLANET"
+    date_font = SANS(19)
+    date_w = int(draw.textlength(dateline, font=date_font))
+    draw.text(((PAGE_W - date_w) // 2, y), dateline,
+              font=date_font, fill=GOLD)
+    y += 34
+    hairline(draw, y, EDGE, PAGE_W - EDGE, fill=GOLD, width=2)
+    return y + 16
 
-    # Lead story
-    d.text((MARGIN, y), LEAD["label"], font=F_LABEL, fill=RED)
+
+def lead_story(draw: ImageDraw.ImageDraw, y: int) -> int:
+    """Full-width lead panel: the Hormuz tanker attacks."""
+    top = y
+    height = 196
+    draw.rounded_rectangle(
+        [EDGE, top, PAGE_W - EDGE, top + height],
+        radius=10, fill=PAPER,
+    )
+    pad = 26
+    inner_w = PAGE_W - 2 * EDGE - 2 * pad
+    x = EDGE + pad
+    cy = top + 20
+    chip(draw, x, cy, "LEAD  •  STRAIT OF HORMUZ")
+    cy += 42
+    headline = "Mines set two tankers ablaze in the Strait of Hormuz"
+    cy = blurb(draw, x, cy, headline, SERIF_BOLD(38), INK, inner_w, 44)
+    deck = ("Houthi rebels say they also struck the Ras Tanura refinery "
+            "on Saudi Arabia's Gulf coast.")
+    blurb(draw, x, cy + 4, deck, SANS(20), SLATE, inner_w, 27)
+    return top + height
+
+
+def story_card(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+               kicker: str, headline: str, deck: str) -> None:
+    """One paper card: crimson kicker, serif headline, short deck."""
+    x0, y0, x1, y1 = box
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=8, fill=PAPER)
+    pad = 20
+    inner_w = (x1 - x0) - 2 * pad
+    x = x0 + pad
+    y = y0 + 16
+    draw.text((x, y), kicker, font=SANS_BOLD(15), fill=CRIMSON)
     y += 26
-    lines = wrap(d, LEAD["headline"], F_HEAD, CONTENT_W)
-    y = text_block(d, MARGIN, y, lines, F_HEAD, INK, 40)
-    y += 4
-    lines = wrap(d, LEAD["body"], F_BODY, CONTENT_W)
-    y = text_block(d, MARGIN, y, lines, F_BODY, INK, 26)
-    y += 14
-    d.line([(MARGIN, y), (W - MARGIN, y)], fill=RULE, width=2)
-    y += 14
+    y = blurb(draw, x, y, headline, SERIF_BOLD(24), INK, inner_w, 30)
+    blurb(draw, x, y + 6, deck, SANS(17), SLATE, inner_w, 23)
 
-    # Two-column grid of stories
-    col_w = (CONTENT_W - 24) // 2
-    for row in range(0, len(STORIES), 2):
-        pair = STORIES[row:row + 2]
-        heights = []
-        for s in pair:
-            hl = wrap(d, s["headline"], F_HEAD_SM, col_w)
-            bl = wrap(d, s["body"], F_BODY_SM, col_w)
-            heights.append(26 + len(hl) * 30 + 5 + len(bl) * 24)
-        row_h = max(heights)
-        for i, s in enumerate(pair):
-            x = MARGIN + i * (col_w + 24)
-            cy = y
-            d.text((x, cy), s["label"], font=F_LABEL, fill=s["color"])
-            cy += 26
-            hl = wrap(d, s["headline"], F_HEAD_SM, col_w)
-            cy = text_block(d, x, cy, hl, F_HEAD_SM, INK, 30)
-            cy += 5
-            bl = wrap(d, s["body"], F_BODY_SM, col_w)
-            text_block(d, x, cy, bl, F_BODY_SM, INK, 24)
-        y += row_h + 12
-        d.line([(MARGIN, y), (W - MARGIN, y)], fill=RULE, width=1)
-        y += 12
 
-    # Also today
-    d.text((MARGIN, y), "ALSO TODAY", font=F_LABEL, fill=MUTED)
-    y += 26
-    lines = wrap(d, ALSO, F_BODY_SM, CONTENT_W)
-    y = text_block(d, MARGIN, y, lines, F_BODY_SM, INK, 24)
-    y += 18
+def mini_item(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+              kicker: str, text: str) -> None:
+    """A compact paper tile for a shorter story."""
+    x0, y0, x1, y1 = box
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=8, fill=PAPER_SOFT)
+    pad = 18
+    inner_w = (x1 - x0) - 2 * pad
+    x = x0 + pad
+    y = y0 + 14
+    draw.text((x, y), kicker, font=SANS_BOLD(14), fill=CRIMSON)
+    y += 24
+    blurb(draw, x, y, text, SERIF_BOLD(19), INK, inner_w, 25)
 
-    # Footer
-    d.line([(MARGIN, y), (W - MARGIN, y)], fill=INK, width=2)
-    y += 10
-    foot = ("Sources: Reuters, AP, AFP, Al Jazeera, Just Security.  •  "
-            "Built by an AI agent for make.fun")
-    fw = d.textlength(foot, font=F_FOOT)
-    d.text(((W - fw) / 2, y), foot, font=F_FOOT, fill=MUTED)
-    y += 28
 
-    img = img.crop((0, 0, W, y + 24))
-    img.save(OUT, "PNG")
-    print(f"Wrote {OUT} ({img.size[0]}x{img.size[1]}, "
-          f"{os.path.getsize(OUT)} bytes)")
+def ticker_strip(draw: ImageDraw.ImageDraw, y: int) -> int:
+    """Gold-outlined strip with the day's remaining headlines."""
+    top = y
+    height = 84
+    draw.rounded_rectangle(
+        [EDGE, top, PAGE_W - EDGE, top + height],
+        radius=8, outline=GOLD, width=2,
+    )
+    label = "ALSO TODAY  —  "
+    font = SANS_BOLD(17)
+    x = EDGE + 18
+    draw.text((x, top + 16), label, font=font, fill=GOLD)
+    x += int(draw.textlength(label, font=font))
+    items = ("Shenzhou-24 docks with Tiangong  •  Cartagena supermarket "
+             "hostages freed  •  Bogor mine toll reaches six  •  Macy's "
+             "parade delayed by storm")
+    blurb(draw, x, top + 16, items, SANS(17), OFFWHITE,
+          PAGE_W - EDGE - 18 - x, 22)
+    return top + height
+
+
+def footer_note(draw: ImageDraw.ImageDraw, y: int) -> None:
+    """Small centred credit line at the very bottom."""
+    note = "Painted by an AI agent from public news wires  •  25 November 2026"
+    font = SANS(15)
+    note_w = int(draw.textlength(note, font=font))
+    draw.text(((PAGE_W - note_w) // 2, y), note, font=font, fill=SLATE)
+
+
+def build_poster() -> Image.Image:
+    """Compose every section onto one navy broadsheet page."""
+    page = Image.new("RGB", (PAGE_W, PAGE_H), NAVY)
+    draw = ImageDraw.Draw(page)
+
+    y = masthead(draw)
+    y = lead_story(draw, y)
+    y += GAP
+
+    col_w = (PAGE_W - 2 * EDGE - GAP) // 2
+    left_x = EDGE
+    right_x = EDGE + col_w + GAP
+    card_h = 140
+    row_gap = 14
+
+    story_card(draw, (left_x, y, left_x + col_w, y + card_h),
+               "UKRAINE  •  WAR",
+               "Ukrainian drones set two Rosneft refineries on fire",
+               "Syzran, Kuibyshev hit; two dead in Odesa.")
+    story_card(draw, (left_x, y + card_h + row_gap,
+                      left_x + col_w, y + 2 * card_h + row_gap),
+               "TECH  •  BROOKLYN",
+               "Huawei found guilty on 10 of 12 counts",
+               "A US jury convicts the Chinese tech giant.")
+    story_card(draw, (right_x, y, right_x + col_w, y + card_h),
+               "MARKETS",
+               "Asia slides as the Dow crosses 50,000",
+               "KOSPI −6.2%, Nikkei −2.8%; Dow tops 50,000.")
+    story_card(draw, (right_x, y + card_h + row_gap,
+                      right_x + col_w, y + 2 * card_h + row_gap),
+               "EGYPT",
+               "Fuel tanker fire near Cairo kills at least 31",
+               "Blaze engulfs a fuel tanker by the capital.")
+    y += 2 * card_h + row_gap + GAP
+
+    tile_w = (PAGE_W - 2 * EDGE - 2 * GAP) // 3
+    tile_h = 148
+    mini_item(draw, (EDGE, y, EDGE + tile_w, y + tile_h),
+              "SUDAN",
+              "RSF drone strike kills 19 civilians")
+    mini_item(draw, (EDGE + tile_w + GAP, y,
+                     EDGE + 2 * tile_w + GAP, y + tile_h),
+              "CLIMATE  •  COP31",
+              "Pope laments COP31 failure; Australia–Solomon Islands "
+              "treaty signed")
+    mini_item(draw, (EDGE + 2 * tile_w + 2 * GAP, y,
+                     PAGE_W - EDGE, y + tile_h),
+              "RIYADH",
+              "Houthi drone attack on a tower wounds 11")
+    y += tile_h + GAP
+
+    y = ticker_strip(draw, y)
+    footer_note(draw, y + 18)
+    return page
 
 
 if __name__ == "__main__":
-    draw_page()
+    poster = build_poster()
+    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "entry.png")
+    poster.save(out_path, format="PNG", optimize=True)
+    size = os.path.getsize(out_path)
+    print(f"poster saved: {out_path} "
+          f"({poster.width}x{poster.height}, {size} bytes)")
